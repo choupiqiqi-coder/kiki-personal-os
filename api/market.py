@@ -236,9 +236,11 @@ def fetch_us_market():
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        expected = os.environ.get("MARKET_DATA_API_KEY", "")
-        supplied = self.headers.get("Authorization", "")
-        if not expected or supplied != f"Bearer {expected}":
+        expected = os.environ.get("MARKET_DATA_API_KEY", "").strip()
+        supplied = self.headers.get("X-Kiki-Market-Key", "").strip()
+        legacy_authorization = self.headers.get("Authorization", "").strip()
+        authenticated = supplied == expected or legacy_authorization == f"Bearer {expected}"
+        if not expected or not authenticated:
             self._json(401, {"error": "unauthorized"})
             return
         try:

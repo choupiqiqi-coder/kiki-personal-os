@@ -5,9 +5,16 @@ export class AKShareMarketDataProvider implements MarketDataProvider {
   readonly id = "akshare";
   constructor(private readonly baseUrl: string, private readonly apiKey: string) {}
 
+  private requestHeaders(): HeadersInit {
+    return {
+      "x-kiki-market-key": this.apiKey.trim(),
+      accept: "application/json",
+    };
+  }
+
   private async overview(): Promise<MarketOverview> {
     const response = await fetch(this.baseUrl, {
-      headers: { authorization: `Bearer ${this.apiKey}`, accept: "application/json" },
+      headers: this.requestHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(45_000),
     });
@@ -17,7 +24,7 @@ export class AKShareMarketDataProvider implements MarketDataProvider {
     return value;
   }
 
-  async getUSMarketOverview(): Promise<USMarketOverview> { const url=new URL(this.baseUrl);url.searchParams.set("type","us_market");const response=await fetch(url,{headers:{authorization:`Bearer ${this.apiKey}`,accept:"application/json"},cache:"no-store",signal:AbortSignal.timeout(45_000)});if(!response.ok)throw new Error(`AKShare 美股服务返回 ${response.status}`);const value:unknown=await response.json();if(!isUSOverview(value))throw new Error("AKShare 美股服务返回的数据结构无效");return value; }
+  async getUSMarketOverview(): Promise<USMarketOverview> { const url=new URL(this.baseUrl);url.searchParams.set("type","us_market");const response=await fetch(url,{headers:this.requestHeaders(),cache:"no-store",signal:AbortSignal.timeout(45_000)});if(!response.ok)throw new Error(`AKShare 美股服务返回 ${response.status}`);const value:unknown=await response.json();if(!isUSOverview(value))throw new Error("AKShare 美股服务返回的数据结构无效");return value; }
   async getUSMajorIndices():Promise<USMarketIndex[]>{return(await this.getUSMarketOverview()).indices}
   async getNasdaq100():Promise<USMarketIndex>{const item=(await this.getUSMajorIndices()).find(index=>index.code===".NDX");if(!item)throw new Error("NASDAQ-100 数据缺失");return item}
 
@@ -25,7 +32,7 @@ export class AKShareMarketDataProvider implements MarketDataProvider {
     const url = new URL(this.baseUrl);
     url.searchParams.set("type", "fund");
     url.searchParams.set("code", symbol);
-    const response = await fetch(url, { headers: { authorization: `Bearer ${this.apiKey}`, accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(45_000) });
+    const response = await fetch(url, { headers: this.requestHeaders(), cache: "no-store", signal: AbortSignal.timeout(45_000) });
     if (!response.ok) throw new Error(`AKShare 基金服务返回 ${response.status}`);
     const value: unknown = await response.json();
     if (!isFundNav(value)) throw new Error("AKShare 基金服务返回的数据结构无效");
