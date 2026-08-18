@@ -1,0 +1,2 @@
+import Link from "next/link";
+export function MarketSwitch({active}:{active:"a"|"us"}){return <nav aria-label="市场切换" className="mt-5 grid grid-cols-2 rounded-2xl bg-surface-muted p-1"><Link href="/finance/market" className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-semibold ${active==="a"?"bg-white text-primary shadow-sm":"text-muted-foreground"}`}>A 股</Link><Link href="/finance/market/us" className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-semibold ${active==="us"?"bg-white text-primary shadow-sm":"text-muted-foreground"}`}>美股</Link></nav>}

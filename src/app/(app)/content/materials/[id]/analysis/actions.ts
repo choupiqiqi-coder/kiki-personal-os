@@ -1,0 +1,3 @@
+"use server";
+import { revalidatePath } from "next/cache";import { redirect } from "next/navigation";import { requireUser } from "@/server/auth/current-user";import { analyzeViralMaterial } from "@/server/ai/service";
+export async function analyzeMaterialAction(id:string){const user=await requireUser();try{await analyzeViralMaterial(user.id,id);}catch(error){const message=error instanceof Error?error.message:"分析失败";redirect(`/content/materials/${id}/analysis?error=${encodeURIComponent(message)}`);}revalidatePath(`/content/materials/${id}/analysis`);redirect(`/content/materials/${id}/analysis?generated=1`);}

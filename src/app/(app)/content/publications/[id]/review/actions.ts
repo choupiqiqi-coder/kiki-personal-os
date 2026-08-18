@@ -1,0 +1,3 @@
+"use server";
+import { revalidatePath } from "next/cache";import { redirect } from "next/navigation";import { requireUser } from "@/server/auth/current-user";import { analyzeContentReview } from "@/server/ai/service";
+export async function analyzeReviewAction(id:string){const user=await requireUser();try{await analyzeContentReview(user.id,id);}catch(error){const message=error instanceof Error?error.message:"分析失败";redirect(`/content/publications/${id}/review?error=${encodeURIComponent(message)}`);}revalidatePath(`/content/publications/${id}/review`);redirect(`/content/publications/${id}/review?generated=1`);}

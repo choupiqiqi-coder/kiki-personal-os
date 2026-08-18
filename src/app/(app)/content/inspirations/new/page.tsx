@@ -1,0 +1,2 @@
+import Link from "next/link"; import { InspirationForm } from "@/components/content/inspiration-form"; import { saveInspirationAction } from "../../actions";
+export default function NewInspiration(){return <main className="mx-auto w-full max-w-xl px-4 py-6 pb-28 sm:px-6"><Link href="/content/inspirations" className="text-sm text-muted-foreground">← 返回灵感</Link><h1 className="mt-5 text-3xl font-semibold">新增灵感</h1><div className="mt-8"><InspirationForm action={saveInspirationAction.bind(null,null)}/></div></main>}

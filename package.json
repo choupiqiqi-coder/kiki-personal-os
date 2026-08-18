@@ -1,0 +1,37 @@
+{
+  "name": "kiki-personal-os",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test:health": "node --experimental-strip-types --test tests/health-calculations.test.ts",
+    "test:finance": "node --experimental-strip-types --test tests/finance-calculations.test.ts",
+    "test:funds": "node --experimental-strip-types --test tests/fund-calculations.test.ts",
+    "test:daily": "node --experimental-strip-types --test tests/daily-state-machine.test.ts tests/daily-dashboard.test.ts",
+    "db:verify": "node scripts/verify-migrations.mjs",
+    "db:check": "node scripts/check-supabase-connection.mjs",
+    "db:push": "supabase db push",
+    "db:migrations": "supabase migration list"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.0",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0",
+    "supabase": "^2.111.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,2 @@
+import Link from "next/link";import { MaterialForm } from "@/components/content/material-form";import { saveMaterialAction } from "../../actions";
+export default function NewMaterial(){return <main className="mx-auto w-full max-w-xl px-4 py-6 pb-28 sm:px-6"><Link href="/content/materials" className="text-sm text-muted-foreground">← 返回素材</Link><h1 className="mt-5 text-3xl font-semibold">新增爆款素材</h1><div className="mt-8"><MaterialForm action={saveMaterialAction.bind(null,null)}/></div></main>}

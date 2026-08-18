@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/market.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{tests/**,docs/**,supabase/**,src/**,public/**,.next/**,node_modules/**}"
+    }
+  }
+}

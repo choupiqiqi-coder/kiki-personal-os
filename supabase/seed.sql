@@ -1,0 +1,2 @@
+-- Seed data is intentionally empty. MVP data belongs to authenticated users
+-- and should be created through the application or local test fixtures.

@@ -1,0 +1,2 @@
+import Link from "next/link";import { BodyForm } from "@/components/health/body-form";import { saveBodyAction } from "../../actions";
+export default function NewBodyPage(){return <main className="mx-auto max-w-2xl px-4 py-6 pb-28"><Link href="/health/body" className="text-sm text-muted-foreground">← 体态记录</Link><h1 className="my-5 text-3xl font-semibold">记录身体数据</h1><BodyForm action={saveBodyAction.bind(null,null)}/></main>}

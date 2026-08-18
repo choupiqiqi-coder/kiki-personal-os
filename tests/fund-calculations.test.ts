@@ -1,0 +1,4 @@
+import assert from "node:assert/strict";import test from "node:test";import {calculateFundValuation} from "../src/lib/finance/fund-calculations.ts";
+test("份额与真实净值优先计算市值",()=>{const value=calculateFundValuation({shares:1000,latestNav:1.403,manualHoldingAmount:9999,costBasis:1200});assert.equal(value.marketValue,1403);assert.equal(value.cumulativeReturn,203);assert.equal(value.returnRate,203/1200)});
+test("没有净值时不伪造市值",()=>{const value=calculateFundValuation({shares:1000,latestNav:null,manualHoldingAmount:null,costBasis:1200});assert.equal(value.marketValue,null);assert.equal(value.cumulativeReturn,null)});
+test("只有支付宝当前金额时使用手动金额",()=>{const value=calculateFundValuation({shares:null,latestNav:null,manualHoldingAmount:1500,costBasis:1200});assert.equal(value.marketValue,1500);assert.equal(value.cumulativeReturn,300);assert.equal(value.returnRate,.25)});

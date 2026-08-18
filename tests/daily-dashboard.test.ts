@@ -1,0 +1,3 @@
+import assert from "node:assert/strict";import test from "node:test";import {findNextAction,summarizeFundPortfolio} from "../src/lib/daily/dashboard-summary.ts";
+test("基金汇总只在全部有真实市值时计算",()=>{assert.equal(summarizeFundPortfolio([{market_value:100,cost_basis:80},{market_value:null,cost_basis:20}]).marketValue,null);assert.deepEqual(summarizeFundPortfolio([{market_value:100,cost_basis:80},{market_value:50,cost_basis:40}]),{marketValue:150,returnRate:.25})});
+test("下一步优先取稳定排序的未完成重点",()=>assert.equal(findNextAction([{title:"A",status:"done"},{title:"B",status:"planned"}],[{title:"C",status:"todo"}]),"B"));

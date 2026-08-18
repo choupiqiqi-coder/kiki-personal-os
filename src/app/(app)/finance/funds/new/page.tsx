@@ -1,0 +1,1 @@
+import { FundForm } from "@/components/finance/fund-form";import { FinanceNav } from "@/components/finance/finance-nav";export default function Page(){return <main className="mx-auto max-w-2xl px-4 py-6 pb-28"><p className="text-sm font-semibold text-primary">MY FUNDS</p><h1 className="mt-2 text-3xl font-semibold">添加基金</h1><FinanceNav/><FundForm/></main>}

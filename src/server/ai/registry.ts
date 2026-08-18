@@ -1,0 +1,3 @@
+import "server-only";
+import { DEFAULT_PROVIDER,TASK_CONFIG } from "./config";import type { AiProvider,AiTaskType } from "./types";import { AnthropicProvider } from "./providers/anthropic";import { CustomOpenAiCompatibleProvider } from "./providers/custom-openai-compatible";
+export function getProvider(task:AiTaskType):AiProvider{const config=TASK_CONFIG[task];switch(DEFAULT_PROVIDER){case "anthropic":return new AnthropicProvider(config.model);case "custom_openai_compatible":return new CustomOpenAiCompatibleProvider(config.model);case "openai":throw new Error("OpenAI 适配器尚未接入");case "gemini":throw new Error("Gemini 适配器尚未接入");case "deepseek":throw new Error("DeepSeek 适配器尚未接入");default:throw new Error("未知 AI Provider");}}

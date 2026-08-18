@@ -1,0 +1,4 @@
+export type DailyWorkflowState="not_started"|"morning_planning"|"active_day"|"evening_review"|"completed";
+export type DailyEvent="start_morning"|"complete_morning"|"skip_morning"|"start_evening"|"complete_evening"|"skip_evening";
+const transitions:Record<DailyWorkflowState,Partial<Record<DailyEvent,DailyWorkflowState>>>={not_started:{start_morning:"morning_planning",skip_morning:"active_day",start_evening:"evening_review"},morning_planning:{complete_morning:"active_day",skip_morning:"active_day",start_evening:"evening_review"},active_day:{start_evening:"evening_review"},evening_review:{complete_evening:"completed",skip_evening:"completed"},completed:{}};
+export function transitionDailyState(current:DailyWorkflowState,event:DailyEvent){const next=transitions[current][event];if(!next)throw new Error(`不允许从 ${current} 执行 ${event}`);return next}

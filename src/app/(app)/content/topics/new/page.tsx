@@ -1,0 +1,2 @@
+import Link from "next/link";import { TopicForm } from "@/components/content/topic-form";import { saveTopicAction } from "../../actions";
+export default function NewTopic(){return <main className="mx-auto w-full max-w-xl px-4 py-6 pb-28 sm:px-6"><Link href="/content/topics" className="text-sm text-muted-foreground">← 返回选题</Link><h1 className="mt-5 text-3xl font-semibold">新增选题</h1><div className="mt-8"><TopicForm action={saveTopicAction.bind(null,null)}/></div></main>}

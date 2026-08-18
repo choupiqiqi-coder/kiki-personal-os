@@ -1,0 +1,3 @@
+import Link from "next/link";
+const items=[[/content\/inspirations/,"/content/inspirations","灵感"],[/content\/materials/,"/content/materials","爆款"],[/content\/topics|content\/publications/,"/content/topics","选题"],[/content\/reviews/,"/content/reviews","复盘"]] as const;
+export function ContentNav({path}:{path:string}){ return <nav aria-label="内容生产导航" className="mt-6 flex overflow-x-auto rounded-2xl bg-surface-muted p-1">{items.map(([match,href,label])=><Link key={href} href={href} className={`min-w-20 flex-1 rounded-xl px-4 py-2.5 text-center text-sm font-medium ${match.test(path)?"bg-surface text-primary shadow-sm":"text-muted-foreground"}`}>{label}</Link>)}</nav>; }
