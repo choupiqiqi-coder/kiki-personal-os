@@ -1,6 +1,7 @@
 """Read-only AKShare market endpoint for Kiki Personal OS."""
 
 import json
+import hmac
 import math
 import os
 import time as time_module
@@ -237,10 +238,22 @@ def fetch_us_market():
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         expected = os.environ.get("MARKET_DATA_API_KEY", "").strip()
-        supplied = self.headers.get("X-Kiki-Market-Key", "").strip()
+        dedicated_key = self.headers.get("X-Kiki-Market-Key", "").strip()
+        standard_key = self.headers.get("X-API-Key", "").strip()
         legacy_authorization = self.headers.get("Authorization", "").strip()
-        authenticated = supplied == expected or legacy_authorization == f"Bearer {expected}"
+        supplied_keys = (dedicated_key, standard_key, legacy_authorization.removeprefix("Bearer "))
+        authenticated = bool(expected) and any(
+            supplied and hmac.compare_digest(supplied, expected) for supplied in supplied_keys
+        )
         if not expected or not authenticated:
+            print(
+                "market_auth_denied",
+                f"configured={bool(expected)}",
+                f"dedicated_header={bool(dedicated_key)}",
+                f"standard_header={bool(standard_key)}",
+                f"bearer_header={legacy_authorization.startswith('Bearer ')}",
+                flush=True,
+            )
             self._json(401, {"error": "unauthorized"})
             return
         try:

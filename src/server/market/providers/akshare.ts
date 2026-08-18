@@ -8,6 +8,7 @@ export class AKShareMarketDataProvider implements MarketDataProvider {
   private requestHeaders(): HeadersInit {
     return {
       "x-kiki-market-key": this.apiKey.trim(),
+      "x-api-key": this.apiKey.trim(),
       accept: "application/json",
     };
   }
