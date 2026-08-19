@@ -5,12 +5,20 @@ import hmac
 import math
 import os
 import time as time_module
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from zoneinfo import ZoneInfo
 from urllib.parse import parse_qs, urlparse
 
 import akshare as ak
+import requests
+from akshare.stock.stock_zh_a_sina import (
+    _get_zh_a_page_count,
+    zh_sina_a_stock_payload,
+    zh_sina_a_stock_url,
+)
+from akshare.utils import demjson
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 INDEX_TARGETS = {
@@ -86,29 +94,39 @@ def fetch_indices(data_time):
 
 def fetch_breadth_and_turnover(data_time):
     source = "Sina"
-    frame = retry_call(ak.stock_zh_a_spot, 3)
-    symbols = frame.iloc[:, 0].astype(str)
-    frame = frame[symbols.str.startswith(("sh", "sz"))]
-    change_columns = [frame.iloc[:, 4]]
-    turnover_columns = [frame.iloc[:, 12]]
     changes = []
     turnover = 0.0
-    for column in change_columns:
-        for value in column:
-            try:
-                number = float(value)
-                if math.isfinite(number):
-                    changes.append(number)
-            except (TypeError, ValueError):
+    session = requests.Session()
+    session.headers.update(
+        {
+            "Referer": "https://vip.stock.finance.sina.com.cn/mkt/",
+            "User-Agent": "Mozilla/5.0 (compatible; KikiPersonalOS/1.0; market-data)",
+        }
+    )
+    page_count = math.ceil(_get_zh_a_page_count() * 80 / 100)
+    for page in range(1, page_count + 1):
+        payload = zh_sina_a_stock_payload.copy()
+        payload.update({"page": str(page), "num": "100"})
+
+        def fetch_page():
+            response = session.get(zh_sina_a_stock_url, params=payload, timeout=12)
+            response.raise_for_status()
+            if not response.text.lstrip().startswith("["):
+                raise RuntimeError(f"Sina A股第 {page} 页返回非行情内容")
+            return demjson.decode(response.text)
+
+        rows = retry_call(fetch_page, 3)
+        for row in rows:
+            if not str(row.get("symbol", "")).startswith(("sh", "sz")):
                 continue
-    for column in turnover_columns:
-        for value in column:
-            try:
-                number = float(value)
-                if math.isfinite(number):
-                    turnover += number
-            except (TypeError, ValueError):
-                continue
+            change = nullable_number(row.get("changepercent"))
+            amount = nullable_number(row.get("amount"))
+            if change is not None:
+                changes.append(change)
+            if amount is not None:
+                turnover += amount
+        if page < page_count:
+            time_module.sleep(0.12)
     if not changes or turnover <= 0:
         raise RuntimeError("AKShare 沪深股票行情为空")
     breadth = {
@@ -122,8 +140,8 @@ def fetch_breadth_and_turnover(data_time):
 
 def fetch_sectors(data_time):
     source = "10jqka"
-    frame = retry_call(lambda: ak.stock_fund_flow_industry(symbol="即时"))
-    names, changes = frame.iloc[:, 1], frame.iloc[:, 3]
+    frame = retry_call(ak.stock_board_industry_summary_ths)
+    names, changes = frame.iloc[:, 1], frame.iloc[:, 2]
     sectors = []
     for name_value, change_value in zip(names, changes):
         name = str(name_value).strip()
@@ -142,9 +160,13 @@ def fetch_sectors(data_time):
 def build_overview():
     live_data_time = market_data_time()
     fetched_at = datetime.now(timezone.utc).isoformat()
-    indices, index_data_time, index_source = fetch_indices(live_data_time)
-    breadth, turnover, breadth_source = fetch_breadth_and_turnover(live_data_time)
-    sectors, sector_source = fetch_sectors(live_data_time)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        indices_future = executor.submit(fetch_indices, live_data_time)
+        breadth_future = executor.submit(fetch_breadth_and_turnover, live_data_time)
+        sectors_future = executor.submit(fetch_sectors, live_data_time)
+        indices, index_data_time, index_source = indices_future.result()
+        breadth, turnover, breadth_source = breadth_future.result()
+        sectors, sector_source = sectors_future.result()
     return {
         "indices": indices,
         "breadth": breadth,
