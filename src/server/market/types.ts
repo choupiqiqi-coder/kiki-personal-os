@@ -4,7 +4,7 @@ export type MarketBreadth = { advancing: number; declining: number; unchanged: n
 export type MarketTurnover = { amount: number; previousAmount: number | null; currency: "CNY"; dataTime: string };
 export type SectorPerformance = { name: string; changePercent: number; dataTime: string };
 export type MarketMood = "strong" | "sideways" | "weak";
-export type MarketOverview = { indices: MajorIndex[]; breadth: MarketBreadth; turnover: MarketTurnover; sectors: SectorPerformance[]; provider: string; source: string; dataTime: string; fetchedAt: string };
+export type MarketOverview = { indices: MajorIndex[]; breadth?: MarketBreadth; turnover?: MarketTurnover; sectors: SectorPerformance[]; provider: string; source: string; dataTime: string; fetchedAt: string };
 export type MarketOverviewResult = { data: MarketOverview | null; source: "provider" | "cache" | "cache_stale" | "unavailable"; message: string; error?: string };
 export type FundNavPoint = { date: string; unitNav: number; dailyChangePercent: number | null };
 export type FundNavData = {
@@ -15,6 +15,16 @@ export type USMarketSession = "pre_market" | "open" | "closed" | "weekend" | "un
 export type USMarketIndex = { code: string; name: string; value: number; changePercent: number; tradingDate: string };
 export type USMarketOverview = { indices: USMarketIndex[]; session: USMarketSession; sessionMessage: string; provider: string; source: string; marketTime: string; fetchedAt: string };
 export type USMarketOverviewResult = { data: USMarketOverview | null; source: "provider" | "cache" | "cache_stale" | "unavailable"; message: string; error?: string };
+
+export interface ChinaMarketProvider {
+  readonly id: string;
+  getMarketOverview(): Promise<MarketOverview>;
+}
+
+export interface USIndexMarketProvider {
+  readonly id: string;
+  getUSMarketOverview(): Promise<USMarketOverview>;
+}
 
 export interface MarketDataProvider {
   readonly id: string;

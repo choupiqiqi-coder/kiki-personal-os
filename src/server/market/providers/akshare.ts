@@ -42,8 +42,8 @@ export class AKShareMarketDataProvider implements MarketDataProvider {
 
   getMarketOverview(): Promise<MarketOverview> { return this.overview(); }
   async getMajorIndices(): Promise<MajorIndex[]> { return (await this.overview()).indices; }
-  async getMarketBreadth(): Promise<MarketBreadth> { return (await this.overview()).breadth; }
-  async getMarketTurnover(): Promise<MarketTurnover> { return (await this.overview()).turnover; }
+  async getMarketBreadth(): Promise<MarketBreadth> { const value=(await this.overview()).breadth;if(!value)throw new Error("AKShare 未返回市场宽度");return value; }
+  async getMarketTurnover(): Promise<MarketTurnover> { const value=(await this.overview()).turnover;if(!value)throw new Error("AKShare 未返回成交额");return value; }
   async getSectorPerformance(): Promise<SectorPerformance[]> { return (await this.overview()).sectors; }
   getMarketSnapshot(): Promise<unknown> { return this.overview(); }
   getQuote(): Promise<MarketQuote> { throw new Error("AKShare Lite Provider 暂不提供单标的报价"); }

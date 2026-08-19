@@ -1,4 +1,4 @@
-"""Read-only AKShare market endpoint for Kiki Personal OS."""
+"""Archived AKShare endpoint. This file is not part of the Vercel runtime."""
 
 import json
 import hmac

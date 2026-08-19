@@ -11,6 +11,7 @@
     "test:finance": "node --experimental-strip-types --test tests/finance-calculations.test.ts",
     "test:funds": "node --experimental-strip-types --test tests/fund-calculations.test.ts",
     "test:daily": "node --experimental-strip-types --test tests/daily-state-machine.test.ts tests/daily-dashboard.test.ts",
+    "test:market": "node --experimental-strip-types --test tests/market-providers.test.ts",
     "db:verify": "node scripts/verify-migrations.mjs",
     "db:check": "node scripts/check-supabase-connection.mjs",
     "db:push": "supabase db push",
