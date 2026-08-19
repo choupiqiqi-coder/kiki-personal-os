@@ -6,7 +6,7 @@ export type SectorPerformance = { name: string; changePercent: number; dataTime:
 export type MarketMood = "strong" | "sideways" | "weak";
 export type MarketOverview = { indices: MajorIndex[]; breadth?: MarketBreadth; turnover?: MarketTurnover; sectors: SectorPerformance[]; provider: string; source: string; dataTime: string; fetchedAt: string };
 export type MarketOverviewResult = { data: MarketOverview | null; source: "provider" | "cache" | "cache_stale" | "unavailable"; message: string; error?: string };
-export type FundNavPoint = { date: string; unitNav: number; dailyChangePercent: number | null };
+export type FundNavPoint = { date: string; unitNav: number; accumulatedNav: number | null; dailyChangePercent: number | null };
 export type FundNavData = {
   code: string; name: string | null; fundType: string | null; benchmark: string | null;
   latest: FundNavPoint; history: FundNavPoint[]; provider: string; source: string; fetchedAt: string;
