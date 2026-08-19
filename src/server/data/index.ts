@@ -16,6 +16,7 @@ import { createHealthData, getHealthSummary } from "./health";
 import { createLearningData } from "./learning";
 import { createFinanceData } from "./finance";
 import { createFundsLiteData } from "./funds-lite";
+import { createFundTrendsData } from "./fund-trends";
 import { getProfile,updateProfileLite } from "./profiles";
 import {listMemories,setMemoryStatus} from "./memory";
 import {
@@ -34,6 +35,7 @@ export async function createDataAccess() {
   const healthData = createHealthData(client);
   const finance = createFinanceData(client);
   const funds = createFundsLiteData(client);
+  const fundTrends = createFundTrendsData(client);
 
   return {
     profiles: {
@@ -98,5 +100,6 @@ export async function createDataAccess() {
     learning,
     finance,
     funds,
+    fundTrends,
   };
 }
