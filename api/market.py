@@ -265,6 +265,13 @@ class handler(BaseHTTPRequestHandler):
             else:
                 self._json(200, build_overview())
         except Exception as error:
+            print(
+                "market_fetch_failed",
+                f"request_type={query.get('type', ['a_market'])[0] or 'a_market'}",
+                f"error_type={type(error).__name__}",
+                f"message={str(error)}",
+                flush=True,
+            )
             self._json(502, {"error": "akshare_fetch_failed", "message": str(error)})
 
     def _json(self, status, payload):
