@@ -1,0 +1,2 @@
+# Archived dependency for legacy/akshare-market.py; not used by Vercel.
+akshare==1.18.40
