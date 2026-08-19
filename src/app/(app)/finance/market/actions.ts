@@ -10,7 +10,7 @@ export async function refreshMarketAction() {
   const result = await getMarketOverview(user.id, { forceRefresh: true });
   revalidatePath("/finance/market");
   revalidatePath("/dashboard");
-  const refresh = result.source === "provider" ? "success" : result.source === "cache_stale" ? "stale" : "failed";
+  const refresh = result.source === "provider" || result.source === "cache" ? "success" : result.source === "cache_stale" ? "stale" : "failed";
   redirect(`/finance/market?refresh=${refresh}`);
 }
-export async function refreshUSMarketAction(){const user=await requireUser();const result=await getUSMarketOverview(user.id,{forceRefresh:true});revalidatePath("/finance/market/us");redirect(`/finance/market/us?refresh=${result.source==="provider"?"ok":result.source==="cache_stale"?"stale":"failed"}`)}
+export async function refreshUSMarketAction(){const user=await requireUser();const result=await getUSMarketOverview(user.id,{forceRefresh:true});revalidatePath("/finance/market/us");redirect(`/finance/market/us?refresh=${result.source==="provider"||result.source==="cache"?"ok":result.source==="cache_stale"?"stale":"failed"}`)}

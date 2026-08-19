@@ -4,6 +4,7 @@ import { MarketSwitch } from "@/components/finance/market-switch";
 import { providerStatus } from "@/server/ai/config";
 import { requireUser } from "@/server/auth/current-user";
 import { createDataAccess } from "@/server/data";
+import { formatMarketDateTime } from "@/lib/finance/market-time";
 import { getMarketOverview } from "@/server/market";
 import { refreshMarketAction } from "./actions";
 
@@ -37,4 +38,4 @@ export default async function TodayMarketPage({ searchParams }: { searchParams: 
 
 function NumberCard({ label, value }: { label: string; value: string | number }) { return <div className="rounded-2xl bg-surface-muted p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>; }
 function formatPercent(value: number) { return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`; }
-function formatTime(value: string) { return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }
+function formatTime(value: string) { return formatMarketDateTime(value, "Asia/Shanghai", "中国时间"); }

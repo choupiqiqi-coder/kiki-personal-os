@@ -43,19 +43,39 @@ export function validateUSIndices(indices: USMarketIndex[]): USMarketIndex[] {
 export function compactChinaTime(value: string): string {
   const match = value.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
   if (!match) throw new Error("腾讯 A 股行情时间格式无效");
-  return new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}+08:00`).toISOString();
+  return zonedLocalDateTimeToIso(match.slice(1).map(Number), "Asia/Shanghai");
 }
 
 export function newYorkTimeToIso(value: string): string {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
   if (!match) throw new Error("腾讯美股行情时间格式无效");
-  const date = `${match[1]}-${match[2]}-${match[3]}`;
-  const clock = `${match[4]}:${match[5]}:${match[6]}`;
-  const probe = new Date(`${date}T${clock}Z`);
-  const zoneName = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "longOffset" })
-    .formatToParts(probe).find((part) => part.type === "timeZoneName")?.value;
-  const offset = zoneName?.match(/GMT([+-]\d{2}):?(\d{2})/)?.slice(1).join(":") ?? "-05:00";
-  return new Date(`${date}T${clock}${offset}`).toISOString();
+  return zonedLocalDateTimeToIso(match.slice(1).map(Number), "America/New_York");
+}
+
+export function zonedLocalDateTimeToIso(parts: number[], timeZone: string): string {
+  const [year, month, day, hour, minute, second] = parts;
+  const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  let candidate = desiredAsUtc;
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    const actual = zonedParts(new Date(candidate), timeZone);
+    const actualAsUtc = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, actual.second);
+    candidate -= actualAsUtc - desiredAsUtc;
+  }
+  const verified = zonedParts(new Date(candidate), timeZone);
+  if ([verified.year, verified.month, verified.day, verified.hour, verified.minute, verified.second]
+    .some((part, index) => part !== parts[index])) throw new Error(`${timeZone} 行情时间无法标准化`);
+  return new Date(candidate).toISOString();
+}
+
+function zonedParts(date: Date, timeZone: string) {
+  const values = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(date).map((part) => [part.type, part.value]));
+  return {
+    year: Number(values.year), month: Number(values.month), day: Number(values.day),
+    hour: Number(values.hour), minute: Number(values.minute), second: Number(values.second),
+  };
 }
 
 export function getUSSession(now = new Date()): { session: USMarketSession; sessionMessage: string } {

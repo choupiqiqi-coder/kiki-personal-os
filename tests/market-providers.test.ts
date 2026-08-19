@@ -3,6 +3,8 @@ import test from "node:test";
 import type { ChinaMarketProvider, MarketOverview } from "../src/server/market/types.ts";
 import { marketFailureResult, shouldUseMarketCache } from "../src/server/market/cache-policy.ts";
 import { CompositeChinaMarketProvider } from "../src/server/market/providers/composite.ts";
+import { compactChinaTime, newYorkTimeToIso } from "../src/server/market/providers/shared.ts";
+import { formatMarketDateTime } from "../src/lib/finance/market-time.ts";
 
 const overview: MarketOverview = {
   indices: [
@@ -43,4 +45,19 @@ test("provider failure returns the latest valid snapshot without affecting anoth
   assert.equal(result.source, "cache_stale");
   assert.equal(result.data, overview);
   assert.match(result.message, /最近有效数据/);
+});
+
+test("China local quote time is normalized to UTC and displayed in Shanghai", () => {
+  const iso = compactChinaTime("20260819112800");
+  assert.equal(iso, "2026-08-19T03:28:00.000Z");
+  assert.equal(formatMarketDateTime(iso, "Asia/Shanghai", "中国时间"), "2026-08-19 11:28 中国时间");
+});
+
+test("New York quote time handles EDT and EST without fixed offsets", () => {
+  const summer = newYorkTimeToIso("2026-08-18 17:15:59");
+  const winter = newYorkTimeToIso("2026-01-15 17:15:59");
+  assert.equal(summer, "2026-08-18T21:15:59.000Z");
+  assert.equal(winter, "2026-01-15T22:15:59.000Z");
+  assert.equal(formatMarketDateTime(summer, "America/New_York", "纽约时间"), "2026-08-18 17:15 纽约时间");
+  assert.equal(formatMarketDateTime(winter, "America/New_York", "纽约时间"), "2026-01-15 17:15 纽约时间");
 });
