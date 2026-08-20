@@ -7,24 +7,35 @@ import { TASK_CONFIG } from "./config";
 import { briefSchema,reviewSchema,viralSchema } from "./schemas";
 import type { AiTaskType } from "./types";
 
-type Source={title:string;url?:string|null;type:string};
-type RunInput={userId:string;task:AiTaskType;title:string;artifactType:string;schema:Record<string,unknown>;context:unknown;sources:Source[]};
-const systems:Record<AiTaskType,string>={daily_brief:"你是 Kiki Personal OS 的每日规划分析器。只根据给定数据生成中文结构化报告，不创建或修改任务。事实、推断、建议必须严格分开；数据不足要明确说明。",evening_summary:"你是 Kiki Personal OS 的晚间整理器。只根据当日事实和用户复盘总结。事实、用户判断、AI推断和明日建议必须分开。记忆只能作为待确认提议，不能自动激活。",viral_material_analysis:"你是严谨的自媒体内容分析师。只分析输入素材与用户画像，不假装看过链接内容。区分事实、AI推断、建议；数据不足要明确说明。",content_review:"你是审慎的内容复盘分析师。不能根据单一指标给确定性结论。结合最新指标、选题来源和用户笔记，区分事实、推断和建议。"};
+type Source={title:string;url?:string|null;type:string;dataAsOf?:string|null};
+type RunInput={userId:string;task:AiTaskType;title:string;artifactType:string;schema:Record<string,unknown>;context:unknown;sources:Source[];deduplicationKey?:string;inputHash?:string;dataAsOf?:string;validateOutput?:(value:Record<string,unknown>)=>void};
+const systems:Record<AiTaskType,string>={daily_brief:"你是 Kiki Personal OS 的每日规划分析器。只根据给定数据生成中文结构化报告，不创建或修改任务。事实、推断、建议必须严格分开；数据不足要明确说明。",evening_summary:"你是 Kiki Personal OS 的晚间整理器。只根据当日事实和用户复盘总结。事实、用户判断、AI推断和明日建议必须分开。记忆只能作为待确认提议，不能自动激活。",viral_material_analysis:"你是严谨的自媒体内容分析师。只分析输入素材与用户画像，不假装看过链接内容。区分事实、AI推断、建议；数据不足要明确说明。",content_review:"你是审慎的内容复盘分析师。不能根据单一指标给确定性结论。结合最新指标、选题来源和用户笔记，区分事实、推断和建议。",finance_analysis:"你是 Kiki Personal OS 的个人财富解释器。只能解释输入的确定性事实，不能重算金额、净值、收益、贡献或指数涨跌，不能搜索或编造新闻原因，不能猜测行业、国家、个股权重。QDII 必须引用其正式净值日期；历史不足时必须明确不能判断趋势。输出观察项而非买卖、仓位或收益保证。"};
 
 export async function execute(input:RunInput){
   const client=await createClient(); const provider=getProvider(input.task); const cfg=TASK_CONFIG[input.task];
-  const {data:job,error:jobError}=await client.from("ai_jobs").insert({user_id:input.userId,agent_type:input.task,trigger_type:"user",status:"running",input_refs:{sources:input.sources.map(x=>({title:x.title,type:x.type}))},attempt_count:1}).select("id").single<{id:string}>(); if(jobError||!job) throw new Error(jobError?.message??"AI Job 创建失败");
-  const {data:run,error:runError}=await client.from("ai_runs").insert({user_id:input.userId,job_id:job.id,agent_type:input.task,provider:provider.id,model:provider.model,prompt_version:"phase3-v1",output_schema_version:"1",status:"running"}).select("id").single<{id:string}>(); if(runError||!run) throw new Error(runError?.message??"AI Run 创建失败");
+  const existing=input.deduplicationKey?await client.from("ai_jobs").select("id,status,attempt_count").eq("user_id",input.userId).eq("deduplication_key",input.deduplicationKey).maybeSingle<{id:string;status:string;attempt_count:number}>():{data:null,error:null};
+  if(existing.error)throw new Error(existing.error.message);
+  if(existing.data?.status==="ready"){
+    const {data:readyRun,error}=await client.from("ai_runs").select("artifact_id").eq("user_id",input.userId).eq("job_id",existing.data.id).eq("status","ready").not("artifact_id","is",null).order("completed_at",{ascending:false}).limit(1).maybeSingle<{artifact_id:string}>();if(error)throw new Error(error.message);
+    if(readyRun?.artifact_id){const {data:artifact,error:artifactError}=await client.from("ai_artifacts").select("id,version,content").eq("user_id",input.userId).eq("id",readyRun.artifact_id).single<{id:string;version:number;content:Record<string,unknown>}>();if(artifactError||!artifact)throw new Error(artifactError?.message??"已生成报告读取失败");return{artifactId:artifact.id,version:artifact.version,data:artifact.content,reused:true};}
+  }
+  if(existing.data?.status==="running")throw new Error("相同数据的分析正在生成，请稍候");
+  let job:{id:string};
+  if(existing.data){const {data,error}=await client.from("ai_jobs").update({status:"running",attempt_count:Number(existing.data.attempt_count??0)+1}).eq("user_id",input.userId).eq("id",existing.data.id).select("id").single<{id:string}>();if(error||!data)throw new Error(error?.message??"AI Job 更新失败");job=data;}
+  else {const {data,error}=await client.from("ai_jobs").insert({user_id:input.userId,agent_type:input.task,trigger_type:"user",status:"running",input_refs:{sources:input.sources.map(x=>({title:x.title,type:x.type}))},attempt_count:1,deduplication_key:input.deduplicationKey??null}).select("id").single<{id:string}>();if(error||!data)throw new Error(error?.message??"AI Job 创建失败");job=data;}
+  const {data:run,error:runError}=await client.from("ai_runs").insert({user_id:input.userId,job_id:job.id,agent_type:input.task,provider:provider.id,model:provider.model,prompt_version:input.task==="finance_analysis"?"finance-v1":"phase3-v1",output_schema_version:"1",status:"running",input_hash:input.inputHash??null}).select("id").single<{id:string}>(); if(runError||!run) throw new Error(runError?.message??"AI Run 创建失败");
   try{
     const serialized=JSON.stringify(input.context).slice(0,cfg.maxInputChars);
     const result=await provider.generateStructured({taskType:input.task,system:systems[input.task],input:serialized,schemaName:input.task,schema:input.schema,timeoutMs:cfg.timeoutMs,maxOutputTokens:cfg.maxOutputTokens,temperature:cfg.temperature,reasoning:cfg.reasoning});
+    input.validateOutput?.(result.data);
     const {data:latest}=await client.from("ai_artifacts").select("version").eq("user_id",input.userId).eq("artifact_type",input.artifactType).order("version",{ascending:false}).limit(1).maybeSingle<{version:number}>();
-    const summary=String(result.data.overall_judgment??result.data.core_reason??((result.data.today_focus as string[]|undefined)?.[0])??"AI 分析报告").slice(0,500);
-    const {data:artifact,error:artifactError}=await client.from("ai_artifacts").insert({user_id:input.userId,run_id:run.id,artifact_type:input.artifactType,title:input.title,summary,content:result.data,version:(latest?.version??0)+1,data_as_of:new Date().toISOString()}).select("id,version").single<{id:string;version:number}>(); if(artifactError||!artifact) throw new Error(artifactError?.message??"Artifact 保存失败");
-    if(input.sources.length){const {error}=await client.from("ai_artifact_sources").insert(input.sources.map((source,index)=>({artifact_id:artifact.id,user_id:input.userId,source_title:source.title,source_url:source.url??null,source_type:source.type,citation_order:index,data_as_of:new Date().toISOString()}))); if(error) throw new Error(error.message);}
+    const summary=String(result.data.summary??result.data.overall_judgment??result.data.core_reason??((result.data.today_focus as string[]|undefined)?.[0])??"AI 分析报告").slice(0,500);
+    const dataAsOf=input.dataAsOf??new Date().toISOString();
+    const {data:artifact,error:artifactError}=await client.from("ai_artifacts").insert({user_id:input.userId,run_id:run.id,artifact_type:input.artifactType,title:input.title,summary,content:result.data,version:(latest?.version??0)+1,data_as_of:dataAsOf}).select("id,version").single<{id:string;version:number}>(); if(artifactError||!artifact) throw new Error(artifactError?.message??"Artifact 保存失败");
+    if(input.sources.length){const {error}=await client.from("ai_artifact_sources").insert(input.sources.map((source,index)=>({artifact_id:artifact.id,user_id:input.userId,source_title:source.title,source_url:source.url??null,source_type:source.type,citation_order:index,data_as_of:source.dataAsOf??dataAsOf}))); if(error) throw new Error(error.message);}
     await client.from("ai_runs").update({status:"ready",input_tokens:result.usage.inputTokens,output_tokens:result.usage.outputTokens,total_tokens:result.usage.totalTokens,latency_ms:result.latencyMs,artifact_id:artifact.id,completed_at:new Date().toISOString()}).eq("user_id",input.userId).eq("id",run.id);
     await client.from("ai_jobs").update({status:"ready"}).eq("user_id",input.userId).eq("id",job.id);
-    return {artifactId:artifact.id,version:artifact.version,data:result.data};
+    return {artifactId:artifact.id,version:artifact.version,data:result.data,reused:false};
   }catch(error){const message=error instanceof Error?error.message:"未知 Provider 错误";await client.from("ai_runs").update({status:"failed",error_code:"provider_error",error_message:message.slice(0,1000),completed_at:new Date().toISOString()}).eq("user_id",input.userId).eq("id",run.id);await client.from("ai_jobs").update({status:"failed"}).eq("user_id",input.userId).eq("id",job.id);throw error;}
 }
 
