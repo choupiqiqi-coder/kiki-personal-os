@@ -55,16 +55,16 @@ function collectOutputProse(value:MarketResearchOutput){
   ];
 }
 
-const realizedMarketOutcome=/(?:今天|今日|当日|本次|市场|行情|指数)[^。！？；]{0,36}(?:上涨|下跌|走强|走弱|反弹|回落)|(?:上涨|下跌|走强|走弱|反弹|回落)[^。！？；]{0,24}(?:市场|行情|指数)/;
 const explicitAttribution=[
   /因为[^。！？；]{0,80}(?:所以|因此)[^。！？；]{0,50}(?:上涨|下跌|走强|走弱|反弹|回落)/,
   /(?:今天|今日|当日)?[^。！？；]{0,20}(?:上涨|下跌|走强|走弱|反弹|回落)[^。！？；]{0,30}(?:主要)?(?:是)?(?:因为|由于)/,
   /(?:是|构成)(?:今天|今日|当日)?(?:市场|行情|指数)[^。！？；]{0,12}(?:主要)?(?:原因|驱动)/,
   /(?:市场|行情|指数)(?:就是|主要是)?因为/,
+  /由于[^。！？；]{0,80}(?:所以|因此)[^。！？；]{0,30}必然/,
 ];
-const causalVerb=/(?:导致|引发|造成|驱动了)/;
+const causalVerb=/(?:导致|引发|造成|驱动(?:了)?|影响)/;
 const conditionalMarker=/(?:如果|若|一旦|假如|倘若)/;
-const uncertaintyMarker=/(?:可能|或许|潜在|值得[^。！？；]{0,12}观察|尚不能|不能确认|不足以确认|仅能确认)/;
+const uncertaintyMarker=/(?:可能|或许|潜在|不能排除|一种可能的解释|值得[^。！？；]{0,24}(?:关注|观察)|尚不能|不能确认|不足以确认|仅能确认)/;
 
 function assertNoUnsupportedCausality(parts:string[]){
   for(const part of parts){
@@ -72,10 +72,12 @@ function assertNoUnsupportedCausality(parts:string[]){
       if(explicitAttribution.some(pattern=>pattern.test(sentence))){
         throw new Error(`AI 使用了未经允许的确定性因果措辞：${sentence}`);
       }
-      if(!causalVerb.test(sentence))continue;
-      const isConditional=conditionalMarker.test(sentence)&&uncertaintyMarker.test(sentence);
-      const assertsRealizedOutcome=realizedMarketOutcome.test(sentence);
-      if(!isConditional||assertsRealizedOutcome){
+      const causalMatch=sentence.match(causalVerb);
+      if(!causalMatch)continue;
+      const causalIndex=causalMatch.index??0;
+      const qualifyingPrefix=sentence.slice(0,causalIndex);
+      const isQualified=conditionalMarker.test(qualifyingPrefix)||uncertaintyMarker.test(qualifyingPrefix);
+      if(!isQualified){
         throw new Error(`AI 使用了未经允许的确定性因果措辞：${sentence}`);
       }
     }
