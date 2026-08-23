@@ -1,6 +1,6 @@
 import "server-only";
 import { buildDeepSeekChatBody,parseDeepSeekChatPayload,type DeepSeekChatPayload } from "@/lib/ai/deepseek-chat";
-import type { AiProvider,StructuredRequest,StructuredResult } from "../types";
+import { AiProviderFailure,type AiProvider, type StructuredRequest,type StructuredResult } from "../types";
 
 const DEEPSEEK_BASE_URL="https://api.deepseek.com";
 
@@ -27,7 +27,15 @@ export class DeepSeekProvider implements AiProvider{
       });
       const payload=await readPayload(response);
       if(!response.ok)throw normalizeDeepSeekError(response.status,payload.error);
-      const parsed=parseDeepSeekChatPayload(payload);
+      let parsed:ReturnType<typeof parseDeepSeekChatPayload>;
+      try{parsed=parseDeepSeekChatPayload(payload);}catch(error){
+        throw new AiProviderFailure(error instanceof Error?error.message:"DeepSeek 返回内容无法解析",{
+          provider:this.id,
+          model:payload.model??this.model,
+          latencyMs:Date.now()-started,
+          usage:{inputTokens:payload.usage?.prompt_tokens??null,outputTokens:payload.usage?.completion_tokens??null,totalTokens:payload.usage?.total_tokens??null},
+        });
+      }
       return {data:parsed.data,provider:this.id,model:parsed.model??this.model,latencyMs:Date.now()-started,usage:parsed.usage};
     }catch(error){
       if(error instanceof Error&&error.name==="AbortError")throw new Error(`DeepSeek 请求超时（${request.timeoutMs} ms）`);

@@ -26,7 +26,6 @@ export const marketResearchSchema:Record<string,unknown>={type:"object",addition
 
 export function assertMarketResearchContext(context:MarketResearchContext){const sourceIds=new Set(context.sources.map(x=>x.sourceId));for(const fact of context.facts)if(!sourceIds.has(fact.sourceId))throw new Error(`Fact ${fact.factId} 引用了不存在的 Source ID: ${fact.sourceId}`);for(const item of context.marketNews)if(!sourceIds.has(item.sourceId))throw new Error(`News ${item.factId} 引用了不存在的 Source ID: ${item.sourceId}`);for(const item of context.myFundExposure)if(!sourceIds.has(item.sourceId))throw new Error(`Fund relation ${item.factId} 引用了不存在的 Source ID: ${item.sourceId}`);}
 
-const bannedCausality=[/导致/,/引发/,/造成/,/驱动了/,/因为[^。；，]{0,80}(?:所以|因此)[^。；，]{0,30}(?:上涨|下跌)/,/市场(?:上涨|下跌)[^。；，]{0,30}(?:主要)?(?:是)?由于/,/(?:是|构成)今日行情的原因/,/市场就是因为/];
 export function assertMarketResearchOutput(value:Record<string,unknown>,context?:MarketResearchContext):asserts value is MarketResearchOutput{
   for(const key of ["summary","marketPanorama","marketStructure","crossMarket","fundRelationship","dataAsOf"])if(typeof value[key]!=="string")throw new Error(`Market Research 输出缺少 ${key}`);
   for(const key of ["coreConclusions","risks","dataLimitations"])if(!Array.isArray(value[key]))throw new Error(`Market Research 输出缺少 ${key}`);
@@ -36,12 +35,109 @@ export function assertMarketResearchOutput(value:Record<string,unknown>,context?
   for(const item of drivers.verifiedFacts)if(!ids.has(item.factId))throw new Error(`AI 引用了不存在的 Fact ID: ${item.factId}`);
   for(const item of drivers.possibleDrivers){if(!item.evidenceFactIds?.length)throw new Error("可能驱动因素缺少证据 Fact ID");if(!["time_aligned","direction_aligned","possible_influence"].includes(item.relationship))throw new Error(`AI 使用了不允许的驱动关系: ${item.relationship}`);if(!["low","medium"].includes(item.confidence))throw new Error(`AI 使用了不允许的驱动置信度: ${item.confidence}`);for(const id of item.evidenceFactIds)if(!ids.has(id))throw new Error(`AI 引用了不存在的 Fact ID: ${id}`);}
   for(const item of value.watchNext as MarketResearchOutput["watchNext"])for(const id of item.evidenceFactIds??[])if(!ids.has(id))throw new Error(`观察项引用不存在的 Fact ID: ${id}`);
-  const text=JSON.stringify(value);for(const pattern of bannedCausality){const match=text.match(pattern);if(match)throw new Error(`AI 使用了未经允许的确定性因果措辞：${extractSentence(text,match.index??0)}`);}
-  if(context){assertMarketResearchContext(context);const allowed=new Set((JSON.stringify(context).replaceAll(",","").match(/[-+]?\d+(?:\.\d+)?%?/g)??[]).map(normalizeNumber));for(const token of text.replaceAll(",","").match(/[-+]?\d+(?:\.\d+)?%?/g)??[]){const normalized=normalizeNumber(token);if(!allowed.has(normalized)&&!/^[1-5]$/.test(normalized))throw new Error(`AI 输出包含 Context 中不存在的数字: ${token}`);}}
+  const prose=collectOutputProse(value as MarketResearchOutput);
+  assertNoUnsupportedCausality(prose);
+  if(context){assertMarketResearchContext(context);assertNumbersAreGrounded(prose,context);}
   const reportChars=[value.summary,...(value.coreConclusions as string[]),value.marketPanorama,value.marketStructure,value.crossMarket,value.fundRelationship,...(value.watchNext as MarketResearchOutput["watchNext"]).flatMap(x=>[x.item,x.why,x.changesViewWhen]),...(value.risks as string[]),...(value.dataLimitations as string[])].join("").length;if(reportChars<1200||reportChars>3500)throw new Error(`Market Research 报告长度 ${reportChars} 字，不符合深度报告要求`);
   if(drivers.verifiedFacts.length===0&&drivers.possibleDrivers.length===0&&!drivers.unknowns.some(x=>x.includes("当前事实不足以确认主要驱动因素")))throw new Error("证据不足时必须明确主要驱动因素未知");
 }
 export function hashMarketResearchContext(context:MarketResearchContext){return createHash("sha256").update(stableStringify(context)).digest("hex");}
 function stableStringify(value:unknown):string{if(Array.isArray(value))return`[${value.map(stableStringify).join(",")}]`;if(value&&typeof value==="object")return`{${Object.entries(value as Record<string,unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>`${JSON.stringify(key)}:${stableStringify(item)}`).join(",")}}`;return JSON.stringify(value);}
-function normalizeNumber(value:string){const raw=value.replace(/^\+/,"").replace(/%$/,"");const number=Number(raw);return Number.isFinite(number)?String(number):raw;}
-function extractSentence(text:string,index:number){const start=Math.max(0,Math.max(text.lastIndexOf("。",index),text.lastIndexOf("；",index),text.lastIndexOf('"',index))+1),nextStops=[text.indexOf("。",index),text.indexOf("；",index),text.indexOf('"',index)].filter(x=>x>=0),end=nextStops.length?Math.min(...nextStops):Math.min(text.length,index+120);return text.slice(start,Math.min(end+1,start+160));}
+
+function collectOutputProse(value:MarketResearchOutput){
+  return [
+    value.summary,...value.coreConclusions,value.marketPanorama,
+    ...value.drivers.verifiedFacts.map(item=>item.statement),
+    ...value.drivers.possibleDrivers.map(item=>item.interpretation),
+    ...value.drivers.unknowns,value.marketStructure,value.crossMarket,value.fundRelationship,
+    ...value.watchNext.flatMap(item=>[item.item,item.why,item.changesViewWhen]),
+    ...value.risks,...value.dataLimitations,
+  ];
+}
+
+const realizedMarketOutcome=/(?:今天|今日|当日|本次|市场|行情|指数)[^。！？；]{0,36}(?:上涨|下跌|走强|走弱|反弹|回落)|(?:上涨|下跌|走强|走弱|反弹|回落)[^。！？；]{0,24}(?:市场|行情|指数)/;
+const explicitAttribution=[
+  /因为[^。！？；]{0,80}(?:所以|因此)[^。！？；]{0,50}(?:上涨|下跌|走强|走弱|反弹|回落)/,
+  /(?:今天|今日|当日)?[^。！？；]{0,20}(?:上涨|下跌|走强|走弱|反弹|回落)[^。！？；]{0,30}(?:主要)?(?:是)?(?:因为|由于)/,
+  /(?:是|构成)(?:今天|今日|当日)?(?:市场|行情|指数)[^。！？；]{0,12}(?:主要)?(?:原因|驱动)/,
+  /(?:市场|行情|指数)(?:就是|主要是)?因为/,
+];
+const causalVerb=/(?:导致|引发|造成|驱动了)/;
+const conditionalMarker=/(?:如果|若|一旦|假如|倘若)/;
+const uncertaintyMarker=/(?:可能|或许|潜在|值得[^。！？；]{0,12}观察|尚不能|不能确认|不足以确认|仅能确认)/;
+
+function assertNoUnsupportedCausality(parts:string[]){
+  for(const part of parts){
+    for(const sentence of part.split(/[。！？；\n]+/).map(item=>item.trim()).filter(Boolean)){
+      if(explicitAttribution.some(pattern=>pattern.test(sentence))){
+        throw new Error(`AI 使用了未经允许的确定性因果措辞：${sentence}`);
+      }
+      if(!causalVerb.test(sentence))continue;
+      const isConditional=conditionalMarker.test(sentence)&&uncertaintyMarker.test(sentence);
+      const assertsRealizedOutcome=realizedMarketOutcome.test(sentence);
+      if(!isConditional||assertsRealizedOutcome){
+        throw new Error(`AI 使用了未经允许的确定性因果措辞：${sentence}`);
+      }
+    }
+  }
+}
+
+type NumericDimension="scalar"|"currency"|"percent";
+type NumericMention={raw:string;value:number;baseValue:number;decimals:number;dimension:NumericDimension;factor:number};
+const numericPattern=/[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:万亿元|亿元|万元|元|%|％)?/g;
+
+function parseNumericMentions(text:string):NumericMention[]{
+  return [...text.matchAll(numericPattern)].flatMap(match=>{
+    const raw=match[0].trim();
+    const numberText=raw.match(/[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/)?.[0];
+    if(!numberText)return[];
+    const value=Number(numberText.replaceAll(",",""));
+    if(!Number.isFinite(value))return[];
+    const unit=raw.slice(numberText.length).trim();
+    const decimals=numberText.includes(".")?numberText.split(".")[1].length:0;
+    const factor=unit==="万亿元"?1e12:unit==="亿元"?1e8:unit==="万元"?1e4:1;
+    const dimension:NumericDimension=unit==="%"||unit==="％"?"percent":unit.endsWith("元")?"currency":"scalar";
+    return[{raw,value,baseValue:value*factor,decimals,dimension,factor}];
+  });
+}
+
+function collectContextNumbers(context:MarketResearchContext){
+  const mentions:NumericMention[]=[];
+  const visit=(value:unknown,key="")=>{
+    if(typeof value==="string"){mentions.push(...parseNumericMentions(value));return;}
+    if(typeof value==="number"&&Number.isFinite(value)){
+      const dimension:NumericDimension=/amountCny|previousAmountCny/i.test(key)?"currency":/changePercent/i.test(key)?"percent":"scalar";
+      mentions.push({raw:String(value),value,baseValue:value,decimals:decimalPlaces(value),dimension,factor:1});return;
+    }
+    if(Array.isArray(value)){for(const item of value)visit(item);return;}
+    if(value&&typeof value==="object")for(const [childKey,item] of Object.entries(value as Record<string,unknown>))visit(item,childKey);
+  };
+  visit(context);
+  for(const fact of context.facts){
+    if(typeof fact.value!=="number"||!Number.isFinite(fact.value))continue;
+    const unit=(fact.unit??"").toLowerCase();
+    const dimension:NumericDimension=unit==="cny"||unit.endsWith("元")?"currency":unit==="percent"||unit==="%"?"percent":"scalar";
+    mentions.push({raw:String(fact.value),value:fact.value,baseValue:fact.value,decimals:decimalPlaces(fact.value),dimension,factor:1});
+  }
+  return mentions;
+}
+
+function decimalPlaces(value:number){const text=String(value);if(!text.includes("."))return 0;return text.split(".")[1].length;}
+
+function isDeterministicEquivalent(output:NumericMention,source:NumericMention){
+  if(output.dimension!==source.dimension)return false;
+  const sourceInOutputUnit=source.baseValue/output.factor;
+  if(output.decimals===0)return Number.isInteger(sourceInOutputUnit)&&sourceInOutputUnit===output.value;
+  return Number(sourceInOutputUnit.toFixed(output.decimals))===output.value;
+}
+
+function assertNumbersAreGrounded(parts:string[],context:MarketResearchContext){
+  const sources=collectContextNumbers(context);
+  for(const part of parts){
+    for(const output of parseNumericMentions(part)){
+      if(!sources.some(source=>isDeterministicEquivalent(output,source))){
+        throw new Error(`AI 输出包含 Context 中不存在的数字: ${output.raw}`);
+      }
+    }
+  }
+}

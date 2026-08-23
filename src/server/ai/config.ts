@@ -24,6 +24,6 @@ export const TASK_CONFIG:Record<AiTaskType,TaskConfig>={
   viral_material_analysis:{model:taskModels[DEFAULT_PROVIDER].viral_material_analysis,timeoutMs:45000,maxOutputTokens:1800,temperature:.35,maxInputChars:14000},
   content_review:{model:taskModels[DEFAULT_PROVIDER].content_review,timeoutMs:45000,maxOutputTokens:1400,temperature:.3,maxInputChars:12000},
   finance_analysis:{model:taskModels[DEFAULT_PROVIDER].finance_analysis,timeoutMs:45000,maxOutputTokens:1200,temperature:.2,maxInputChars:12000},
-  market_research:{model:taskModels[DEFAULT_PROVIDER].market_research,timeoutMs:60000,maxOutputTokens:3600,temperature:.2,maxInputChars:30000},
+  market_research:{model:taskModels[DEFAULT_PROVIDER].market_research,timeoutMs:60000,maxOutputTokens:4000,temperature:.2,maxInputChars:30000},
 };
 export function providerStatus(){return (Object.keys(PROVIDER_CONFIG) as AiProviderId[]).map(id=>({id,label:PROVIDER_CONFIG[id].label,model:id==="custom_openai_compatible"?(process.env.AI_CUSTOM_MODEL??"未配置"):id===DEFAULT_PROVIDER?TASK_CONFIG.daily_brief.model:PROVIDER_CONFIG[id].defaultModel,configured:providerConfigured(id),active:id===DEFAULT_PROVIDER}));}
