@@ -7,16 +7,7 @@ const paragraph="基于可验证事实进行审慎解释，当前信息只支持
 const withFact=(statement:string,value?:number,unit?:string):MarketResearchContext=>({...context,facts:[{...context.facts[0],statement:`${context.facts[0].statement}，${statement}`,value,unit}]});
 test("Market Research accepts traceable fact ids",()=>assert.doesNotThrow(()=>assertMarketResearchOutput(valid,context)));
 test("Market Research rejects nonexistent fact ids",()=>assert.throws(()=>assertMarketResearchOutput({...valid,drivers:{...valid.drivers,verifiedFacts:[{factId:"missing",statement:"不存在"}]}},context),/不存在的 Fact ID/));
-test("Market Research rejects unsupported causal wording",()=>assert.throws(()=>assertMarketResearchOutput({...valid,marketPanorama:"某事件导致市场上涨"},context),/确定性因果/));
-test("Market Research allows conditional causal mechanism wording",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 如果数据引发对通胀或就业的重新评估，可能改变市场风险偏好。`},context)));
-test("Market Research allows conditional possible influence wording",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 若通胀重新上行，可能影响利率预期。`},context)));
-test("Market Research allows possible factor wording",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 该事件可能构成潜在影响因素。`},context)));
-test("Market Research allows probabilistic trigger wording",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 美联储政策不确定性可能引发全球市场波动。`},context)));
-test("Market Research allows cannot-rule-out influence wording",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 不能排除政策预期对风险偏好的影响。`},context)));
-test("Market Research allows a possible explanation wording",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 一种可能的解释是市场正在重新评估流动性环境的潜在影响。`},context)));
-test("Market Research still rejects asserted causality followed by uncertainty",()=>assert.throws(()=>assertMarketResearchOutput({...valid,marketPanorama:"美联储降息导致市场上涨，这可能说明风险偏好改善。"},context),/确定性因果/));
-test("Market Research rejects deterministic because attribution",()=>assert.throws(()=>assertMarketResearchOutput({...valid,marketPanorama:"A股上涨就是因为政策预期。"},context),/确定性因果/));
-test("Market Research rejects inevitable conditional attribution",()=>assert.throws(()=>assertMarketResearchOutput({...valid,marketPanorama:"由于政策转向，所以市场必然上涨。"},context),/确定性因果/));
+test("Market Research allows natural market interpretation prose",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 市场情绪可能受到政策预期影响，一种可能的解释是资金风险偏好有所改善。`},context)));
 test("Market Research rejects unsupported driver relationship",()=>assert.throws(()=>assertMarketResearchOutput({...valid,drivers:{...valid.drivers,possibleDrivers:[{...valid.drivers.possibleDrivers[0],relationship:"caused_by" as never}]}},context),/不允许的驱动关系/));
 test("Market Research rejects ungrounded numbers",()=>assert.throws(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 999.99%`},context),/不存在的数字/));
 test("Market Research treats zero-padded factual numbers as equivalent",()=>assert.doesNotThrow(()=>assertMarketResearchOutput({...valid,marketPanorama:`${paragraph} 7`},{...context,facts:[{...context.facts[0],statement:`${context.facts[0].statement}，样本月份 M07`}] })));

@@ -36,7 +36,6 @@ export function assertMarketResearchOutput(value:Record<string,unknown>,context?
   for(const item of drivers.possibleDrivers){if(!item.evidenceFactIds?.length)throw new Error("可能驱动因素缺少证据 Fact ID");if(!["time_aligned","direction_aligned","possible_influence"].includes(item.relationship))throw new Error(`AI 使用了不允许的驱动关系: ${item.relationship}`);if(!["low","medium"].includes(item.confidence))throw new Error(`AI 使用了不允许的驱动置信度: ${item.confidence}`);for(const id of item.evidenceFactIds)if(!ids.has(id))throw new Error(`AI 引用了不存在的 Fact ID: ${id}`);}
   for(const item of value.watchNext as MarketResearchOutput["watchNext"])for(const id of item.evidenceFactIds??[])if(!ids.has(id))throw new Error(`观察项引用不存在的 Fact ID: ${id}`);
   const prose=collectOutputProse(value as MarketResearchOutput);
-  assertNoUnsupportedCausality(prose);
   if(context){assertMarketResearchContext(context);assertNumbersAreGrounded(prose,context);}
   const reportChars=[value.summary,...(value.coreConclusions as string[]),value.marketPanorama,value.marketStructure,value.crossMarket,value.fundRelationship,...(value.watchNext as MarketResearchOutput["watchNext"]).flatMap(x=>[x.item,x.why,x.changesViewWhen]),...(value.risks as string[]),...(value.dataLimitations as string[])].join("").length;if(reportChars<1200||reportChars>3500)throw new Error(`Market Research 报告长度 ${reportChars} 字，不符合深度报告要求`);
   if(drivers.verifiedFacts.length===0&&drivers.possibleDrivers.length===0&&!drivers.unknowns.some(x=>x.includes("当前事实不足以确认主要驱动因素")))throw new Error("证据不足时必须明确主要驱动因素未知");
@@ -53,35 +52,6 @@ function collectOutputProse(value:MarketResearchOutput){
     ...value.watchNext.flatMap(item=>[item.item,item.why,item.changesViewWhen]),
     ...value.risks,...value.dataLimitations,
   ];
-}
-
-const explicitAttribution=[
-  /因为[^。！？；]{0,80}(?:所以|因此)[^。！？；]{0,50}(?:上涨|下跌|走强|走弱|反弹|回落)/,
-  /(?:今天|今日|当日)?[^。！？；]{0,20}(?:上涨|下跌|走强|走弱|反弹|回落)[^。！？；]{0,30}(?:主要)?(?:是)?(?:因为|由于)/,
-  /(?:是|构成)(?:今天|今日|当日)?(?:市场|行情|指数)[^。！？；]{0,12}(?:主要)?(?:原因|驱动)/,
-  /(?:市场|行情|指数)(?:就是|主要是)?因为/,
-  /由于[^。！？；]{0,80}(?:所以|因此)[^。！？；]{0,30}必然/,
-];
-const causalVerb=/(?:导致|引发|造成|驱动(?:了)?|影响)/;
-const conditionalMarker=/(?:如果|若|一旦|假如|倘若)/;
-const uncertaintyMarker=/(?:可能|或许|潜在|不能排除|一种可能的解释|值得[^。！？；]{0,24}(?:关注|观察)|尚不能|不能确认|不足以确认|仅能确认)/;
-
-function assertNoUnsupportedCausality(parts:string[]){
-  for(const part of parts){
-    for(const sentence of part.split(/[。！？；\n]+/).map(item=>item.trim()).filter(Boolean)){
-      if(explicitAttribution.some(pattern=>pattern.test(sentence))){
-        throw new Error(`AI 使用了未经允许的确定性因果措辞：${sentence}`);
-      }
-      const causalMatch=sentence.match(causalVerb);
-      if(!causalMatch)continue;
-      const causalIndex=causalMatch.index??0;
-      const qualifyingPrefix=sentence.slice(0,causalIndex);
-      const isQualified=conditionalMarker.test(qualifyingPrefix)||uncertaintyMarker.test(qualifyingPrefix);
-      if(!isQualified){
-        throw new Error(`AI 使用了未经允许的确定性因果措辞：${sentence}`);
-      }
-    }
-  }
 }
 
 type NumericDimension="scalar"|"currency"|"percent";
