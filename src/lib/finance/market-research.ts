@@ -55,8 +55,8 @@ function collectOutputProse(value:MarketResearchOutput){
 }
 
 type NumericDimension="scalar"|"currency"|"percent";
-type NumericMention={raw:string;value:number;baseValue:number;decimals:number;dimension:NumericDimension;factor:number};
-const numericPattern=/[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:万亿元|亿元|万元|元|%|％)?/g;
+type NumericMention={raw:string;value:number;baseValue:number;decimals:number;dimension:NumericDimension;factor:number;start:number;end:number};
+const numericPattern=/[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:万亿元|亿元|万元|个百分点|百分点|元|%|％)?/g;
 
 function parseNumericMentions(text:string):NumericMention[]{
   return [...text.matchAll(numericPattern)].flatMap(match=>{
@@ -68,8 +68,9 @@ function parseNumericMentions(text:string):NumericMention[]{
     const unit=raw.slice(numberText.length).trim();
     const decimals=numberText.includes(".")?numberText.split(".")[1].length:0;
     const factor=unit==="万亿元"?1e12:unit==="亿元"?1e8:unit==="万元"?1e4:1;
-    const dimension:NumericDimension=unit==="%"||unit==="％"?"percent":unit.endsWith("元")?"currency":"scalar";
-    return[{raw,value,baseValue:value*factor,decimals,dimension,factor}];
+    const dimension:NumericDimension=unit==="%"||unit==="％"||unit==="百分点"||unit==="个百分点"?"percent":unit.endsWith("元")?"currency":"scalar";
+    const start=match.index??0;
+    return[{raw,value,baseValue:value*factor,decimals,dimension,factor,start,end:start+match[0].length}];
   });
 }
 
@@ -79,7 +80,7 @@ function collectContextNumbers(context:MarketResearchContext){
     if(typeof value==="string"){mentions.push(...parseNumericMentions(value));return;}
     if(typeof value==="number"&&Number.isFinite(value)){
       const dimension:NumericDimension=/amountCny|previousAmountCny/i.test(key)?"currency":/changePercent/i.test(key)?"percent":"scalar";
-      mentions.push({raw:String(value),value,baseValue:value,decimals:decimalPlaces(value),dimension,factor:1});return;
+      mentions.push({raw:String(value),value,baseValue:value,decimals:decimalPlaces(value),dimension,factor:1,start:0,end:String(value).length});return;
     }
     if(Array.isArray(value)){for(const item of value)visit(item);return;}
     if(value&&typeof value==="object")for(const [childKey,item] of Object.entries(value as Record<string,unknown>))visit(item,childKey);
@@ -89,7 +90,7 @@ function collectContextNumbers(context:MarketResearchContext){
     if(typeof fact.value!=="number"||!Number.isFinite(fact.value))continue;
     const unit=(fact.unit??"").toLowerCase();
     const dimension:NumericDimension=unit==="cny"||unit.endsWith("元")?"currency":unit==="percent"||unit==="%"?"percent":"scalar";
-    mentions.push({raw:String(fact.value),value:fact.value,baseValue:fact.value,decimals:decimalPlaces(fact.value),dimension,factor:1});
+    mentions.push({raw:String(fact.value),value:fact.value,baseValue:fact.value,decimals:decimalPlaces(fact.value),dimension,factor:1,start:0,end:String(fact.value).length});
   }
   return mentions;
 }
@@ -103,12 +104,52 @@ function isDeterministicEquivalent(output:NumericMention,source:NumericMention){
   return Number(sourceInOutputUnit.toFixed(output.decimals))===output.value;
 }
 
+const derivedDifferenceMarker=/(?:差值|相差|差距|之差|高出|低于|领先|落后|超出|多于|少于|百分点|相比[^。！？；\n]{0,24}(?:高|低|多|少|强|弱)|相对[^。！？；\n]{0,24}(?:高|低|多|少|强|弱))/;
+const derivedRatioMarker=/(?:倍数|倍|占比|约占)/;
+const alwaysStrictNumberContext=/(?:基金|NAV|净值|收益率|持仓|仓位|投入|本金|金额|市值|份额|CPI|PPI|GDP|失业率|就业率|利率|基点|新闻|公告|政策|日期|时间|截至|年|月|日)/i;
+
+function sentenceAround(text:string,mention:NumericMention){
+  const start=Math.max(text.lastIndexOf("。",mention.start),text.lastIndexOf("！",mention.start),text.lastIndexOf("？",mention.start),text.lastIndexOf("；",mention.start),text.lastIndexOf("\n",mention.start))+1;
+  const candidates=["。","！","？","；","\n"].map(mark=>text.indexOf(mark,mention.end)).filter(index=>index>=0);
+  const end=candidates.length?Math.min(...candidates):text.length;
+  return text.slice(start,end);
+}
+
+function analyticalDerivedKind(text:string,mention:NumericMention){
+  const sentence=sentenceAround(text,mention);
+  if(alwaysStrictNumberContext.test(sentence))return null;
+  if(derivedDifferenceMarker.test(sentence))return "difference" as const;
+  if(derivedRatioMarker.test(sentence))return "ratio" as const;
+  return null;
+}
+
+function isDerivedEquivalent(output:NumericMention,sources:NumericMention[],kind:"difference"|"ratio"){
+  for(let left=0;left<sources.length;left++)for(let right=0;right<sources.length;right++){
+    if(left===right)continue;
+    const a=sources[left],b=sources[right];
+    if(kind==="difference"){
+      if(a.dimension!==b.dimension||a.dimension!==output.dimension)continue;
+      const difference=Math.abs(a.baseValue-b.baseValue)/output.factor;
+      if(output.decimals>0&&Number(difference.toFixed(output.decimals))===output.value)return true;
+      if(output.decimals===0&&Number.isInteger(difference)&&difference===output.value)return true;
+    }else{
+      if(b.baseValue===0)continue;
+      const ratio=output.dimension==="percent"?(a.baseValue/b.baseValue)*100:a.baseValue/b.baseValue;
+      if(output.decimals>0&&Number(ratio.toFixed(output.decimals))===output.value)return true;
+      if(output.decimals===0&&Number.isInteger(ratio)&&ratio===output.value)return true;
+    }
+  }
+  return false;
+}
+
 function assertNumbersAreGrounded(parts:string[],context:MarketResearchContext){
   const sources=collectContextNumbers(context);
   for(const part of parts){
     for(const output of parseNumericMentions(part)){
+      const derivedKind=analyticalDerivedKind(part,output);
+      if(derivedKind&&isDerivedEquivalent(output,sources,derivedKind))continue;
       if(!sources.some(source=>isDeterministicEquivalent(output,source))){
-        throw new Error(`AI 输出包含 Context 中不存在的数字: ${output.raw}`);
+        throw new Error(`AI 输出包含无法追溯的核心事实数字: ${output.raw}`);
       }
     }
   }
