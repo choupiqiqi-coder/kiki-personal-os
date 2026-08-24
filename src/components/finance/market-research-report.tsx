@@ -3,7 +3,7 @@ import type { AiArtifactDetail } from "@/server/data/ai-artifacts";
 
 export function MarketResearchReport({artifact,content,context,run}:{artifact:AiArtifactDetail;content:MarketDailyBrief;context:MarketResearchContext;run:Record<string,unknown>|null}){
   const breadth=context.marketStructure.breadth,turnover=context.marketStructure.turnover;
-  const marketLogic=dedupe([...content.interpretations.map(item=>item.text),...content.drivers.possibleDrivers.map(item=>item.text)]).slice(0,4);
+  const marketLogic=dedupe([...content.interpretations.map(item=>item.text),...content.drivers.possibleDrivers.map(item=>item.text)]).slice(0,3);
   const watchNext=content.watchNext.slice(0,3);
   const detailMessages=dedupe([...content.unknowns,...content.drivers.unknowns,...content.dataLimitations,...content.validation.warnings,...content.validation.hiddenClaims.map(item=>item.reason)].map(toUserMessage));
   const visibleTips=detailMessages.slice(0,2);
@@ -24,5 +24,5 @@ function List({values}:{values:string[]}){return values.length?<ul className="mt
 function Fact({label,value}:{label:string;value:string}){return <div className="rounded-2xl bg-surface-muted p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>}
 function formatCny(value:number){return value>=1e12?`${(value/1e12).toFixed(2)} 万亿元`:`${(value/1e8).toFixed(0)} 亿元`}
 function dedupe(values:string[]){const seen=new Set<string>();return values.filter(value=>{const key=value.replace(/\s+/g,"").replace(/[，。；：、]/g,"").toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true;});}
-function joinWatchExplanation(why:string,signal:string){const left=why.trim().replace(/[。；]+$/,"");const right=signal.trim().replace(/[。；]+$/,"");return `${left}。若${right}，当前判断可能发生变化。`;}
+function joinWatchExplanation(why:string,signal:string){const left=why.trim().replace(/[。；]+$/,"");const right=signal.trim().replace(/[。；]+$/,"");const condition=/^(若|如果|当)/.test(right)?right:`若${right}`;return `${left}。${condition}，说明当前判断可能需要调整。`;}
 function toUserMessage(value:string){if(/fetch failed|network|ENOTFOUND|ECONN|HTTP \d+|超时/i.test(value))return"部分外部数据源暂时不可用，当前解读已使用其他可验证事实。";if(/unknown/i.test(value))return"部分市场或基金关系暂时无法可靠确认。";return value.replace(/^.*?中有一条非核心 Claim 已隐藏：/,"一条证据不足的解读已隐藏：").replace(/fetch failed/gi,"数据源暂时不可用");}
