@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { FundRelationshipFact } from "./fund-relationships";
 
 export type FinanceIndexFact = { code:string; name:string; value:number; changePercent:number; marketTime:string };
 export type FinanceFundFact = {
@@ -16,6 +17,7 @@ export type FinanceAnalysisContext = {
   };
   portfolioFacts:{marketValue:number|null; invested:number; profit:number|null; profitRate:number|null};
   fundFacts:FinanceFundFact[];
+  fundRelationshipFacts:FundRelationshipFact[];
   contributionFacts:FinanceContributionFact[];
   trendFacts:{snapshotDays:number; insufficientHistory:boolean; snapshotDataHash:string; ranges:FinanceTrendFact[]};
   dataFreshness:{chinaMarketTime:string|null; usMarketTime:string|null; fundNavDates:Array<{fundCode:string; fundName:string; navDate:string|null; isQdii:boolean}>; snapshotStartDate:string|null; snapshotEndDate:string|null};

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { FundRelationshipFact } from "./fund-relationships";
 
 export type SourceLevel="official"|"market_reference"|"high"|"medium";
 export type ResearchSource={sourceId:string;name:string;url:string|null;level:SourceLevel;publishedAt:string|null;fetchedAt:string};
@@ -10,7 +11,7 @@ export type MarketResearchContext={
   marketStructure:{breadth:{advancers:number;decliners:number;unchanged:number;method:StatisticMethod}|null;limits:{up:number;down:number;method:StatisticMethod}|null;turnover:{amountCny:number;previousAmountCny:number|null;changePercent:number|null;method:StatisticMethod}|null;industries:{top:ResearchFact[];bottom:ResearchFact[];method:StatisticMethod|null};style:ResearchFact[]};
   macroEvents:ResearchFact[];
   marketNews:Array<{factId:string;headline:string;sourceId:string;publishedAt:string|null;factualSummary:string;relatedMarkets:string[];confidence:"official"|"high"|"medium"}>;
-  myFundExposure:Array<{factId:string;fundCode:string;fundName:string;relationshipStatus:"verified"|"unknown";relationship:string;navDate:string|null;sourceId:string}>;
+  myFundExposure:Array<FundRelationshipFact&{factId:string;relationship:string;sourceId:string}>;
   facts:ResearchFact[];sources:ResearchSource[];dataLimitations:string[];dataAsOf:{china:string|null;us:string|null;news:string|null;fetchedAt:string};
 };
 
@@ -60,7 +61,8 @@ export function validateMarketDailyBrief(value:Record<string,unknown>,context:Ma
   const assertIds=(facts:string[],sources:string[]=[])=>{for(const id of facts)if(!factIds.has(id))reject(`AI 引用了不存在的 Fact ID: ${id}`);for(const id of sources)if(!sourceIds.has(id))reject(`AI 引用了不存在的 Source ID: ${id}`);};
   for(const section of [draft.todayInOneSentence,draft.chinaMarket,draft.overseasAndMacro,draft.fundRelationship])assertIds(section.evidenceFactIds,section.sourceIds);
   for(const fact of draft.drivers.verifiedFacts){const canonical=context.facts.find(item=>item.factId===fact.factId);if(!canonical)reject(`AI 引用了不存在的 Fact ID: ${fact.factId}`);if(normalizeText(fact.statement)!==normalizeText(canonical.statement))reject(`AI 修改了已验证事实 ${fact.factId} 的内容`);}
-  if(draft.fundRelationship.relationshipStatus!=="unknown"&&!context.myFundExposure.some(item=>item.relationshipStatus==="verified"))reject("AI 在缺少可靠基金暴露时创建了基金关系");
+  if(draft.fundRelationship.relationshipStatus==="verified"&&!context.myFundExposure.some(item=>item.relationshipStatus==="verified"))reject("AI 在缺少可靠基金暴露时创建了已确认基金关系");
+  if(draft.fundRelationship.relationshipStatus==="possible"&&!context.myFundExposure.some(item=>item.relationshipStatus!=="unknown"))reject("AI 在缺少基金类别或可靠暴露时创建了可能基金关系");
   for(const item of draft.drivers.possibleDrivers){if(!item.evidenceFactIds.length)reject("可能驱动因素缺少证据 Fact ID");assertIds(item.evidenceFactIds);assertRelationship(item);}
   assertFieldNumbersSupported("fundRelationship",draft.fundRelationship.text,context);
   for(const [name,section] of [["todayInOneSentence",draft.todayInOneSentence],["chinaMarket",draft.chinaMarket],["overseasAndMacro",draft.overseasAndMacro],["fundRelationship",draft.fundRelationship]] as const)section.text=sanitizeNarrative(name,section.text,context,warnings,hiddenClaims);
