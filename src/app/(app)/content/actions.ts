@@ -13,7 +13,7 @@ export async function toggleInspirationAction(id:string,value:boolean){ const {u
 export async function deleteInspirationAction(id:string){ const {user,data}=await context(); await data.content.inspirations.remove(user.id,id); refresh(); }
 export async function convertInspirationAction(id:string){ const {user,data}=await context(); const topicId=await data.content.inspirations.convert(user.id,id); refresh(); redirect(`/content/topics/${topicId}/edit`); }
 
-export async function saveMaterialAction(id:string|null,form:FormData){ const {user,data}=await context(); await data.content.materials.save(user.id,id,form); refresh(); redirect("/content/materials"); }
+export async function saveMaterialAction(id:string|null,form:FormData){ const {user,data}=await context(); const materialId=await data.content.materials.save(user.id,id,form); const screenshots=form.getAll("screenshots").filter((item):item is File=>item instanceof File&&item.size>0); if(screenshots.length)await data.content.materials.uploadAssets(user.id,materialId,screenshots); refresh(); redirect(`/content/materials/${materialId}/analysis`); }
 export async function favoriteMaterialAction(id:string,value:boolean){ const {user,data}=await context(); await data.content.materials.favorite(user.id,id,value); refresh(); }
 export async function deleteMaterialAction(id:string){ const {user,data}=await context(); await data.content.materials.remove(user.id,id); refresh(); }
 export async function convertMaterialAction(id:string){ const {user,data}=await context(); const topicId=await data.content.materials.convert(user.id,id); refresh(); redirect(`/content/topics/${topicId}/edit`); }

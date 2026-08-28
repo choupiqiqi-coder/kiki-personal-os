@@ -6,6 +6,9 @@ import { getProvider } from "./registry";
 import { TASK_CONFIG } from "./config";
 import { briefSchema,reviewSchema,viralSchema } from "./schemas";
 import { AiProviderFailure,type AiTaskType,type StructuredResult } from "./types";
+import { normalizeCreatorProfile } from "@/lib/content/creator-profile";
+import { calculateViralityScore } from "@/lib/content/virality";
+import { assertNoCopiedPassages, assertViralAnalysis } from "@/lib/content/viral-analysis";
 
 type Source={title:string;url?:string|null;type:string;dataAsOf?:string|null};
 type RunInput={userId:string;task:AiTaskType;title:string;artifactType:string;artifactMode?:"append"|"daily_latest";schema:Record<string,unknown>;context:unknown;sources:Source[];deduplicationKey?:string;inputHash?:string;dataAsOf?:string;validateOutput?:(value:Record<string,unknown>)=>void;processOutput?:(value:Record<string,unknown>)=>Record<string,unknown>};
@@ -13,6 +16,8 @@ const systems:Record<AiTaskType,string>={daily_brief:"你是 Kiki Personal OS �
 systems.market_research="你是用户的个人每日财经市场解读助手。用清晰、直接、有主次的普通人语言帮用户快速看懂盘面；你不是机构研究员，也不是数据复读器。严格输出 Market Daily Brief v2 JSON，不改变任何字段结构。todayInOneSentence 用一句话说清今天市场的主线。chinaMarket 只回答‘今天发生了什么’：客观描述指数整体表现、市场宽度、成交情况、行业 Top/Bottom 及大盘小盘相对表现；不在这里大量解释资金行为、风险偏好或市场逻辑。interpretations 与 drivers.possibleDrivers 只回答‘这些现象意味着什么’：提炼风险偏好、防御/进攻、大盘/小盘风格、行业轮动、赚钱效应以及 A 股与海外的关系。最多给出 3 条最有信息量、彼此不重复的判断，不要复述 chinaMarket 已经说完的行情事实。文风要自然，可以说‘个股体感比指数更差’‘资金今天更愿意待在防御方向’‘今天不是全面走弱，而是明显分化’‘真正值得注意的是’‘比指数涨跌更重要的是’‘盘面透露出的信号是’。能用简单语言就不使用‘存量博弈’‘边际改善’‘风险偏好修复’‘结构性轮动’‘配置逻辑’‘估值切换’等套话。允许自然的概率性判断，不要每段反复使用‘可能’‘或许’‘无法确认’；限制集中写入 unknowns/dataLimitations。overseasAndMacro 只提炼海外与宏观中对用户最值得关注的变化。fundRelationship 保持现有严谨边界：只建立可靠确认的关系，relationshipStatus=unknown 时不根据基金名称猜测。watchNext 按优先级输出下一交易日真正值得盯的事，最多 3 项；item 是短标题，whyItMatters 与 changesViewWhen 合起来应能组成 1～2 句自然语言，说清明天看什么，以及什么变化意味着市场可能变好或变差；证据不足时不要凑数。核心数字由页面从 Context 渲染，不要机械重复。所有引用必须来自真实 evidenceFactIds/sourceIds；possibleDrivers 的 relationship 仅允许 time_aligned、direction_aligned、possible_influence。不得编造新闻、政策、事件、来源、行情、宏观数据、基金净值、收益、权重或资产暴露；不得把指数涨跌写成基金实际收益；不得输出确定性涨跌预测或买入、卖出、加仓、减仓、具体仓位比例指令。";
 systems.finance_analysis+=" 基金关联必须使用 fundRelationshipFacts：verified 可建立具体关系，partial 只能说明宽泛基金类别，unknown 必须承认关系不足；基金名称不得作为暴露证据，isQdii 只用于正式 NAV 延迟提示。";
 systems.market_research+=" fundRelationship 要回答‘今天哪些市场变化和我的基金最相关、方向上偏正面/偏负面/中性、哪只基金最值得关注以及为什么’，而不是复述基金资料。benchmark 与 confirmedTags 只作为内部判断依据，不逐只抄写完整业绩比较基准、基金代码或关联定义，也不要求覆盖全部基金；没有明显关联的基金可以不提。优先从今日已有市场事实中选择 1～3 个与 verified/partial 基金最相关的变化，并用 1～3 个自然段完成解读。指数基金或 ETF 联接基金在 verified 关系下可以直接说明对应指数或板块当日表现带来的方向性影响，但不得把指数涨跌写成基金实际收益。主动基金只能依据 verified benchmark 或 confirmedTags 做宽泛方向解释，必须说明实际表现仍取决于基金真实持仓，不得把复合基准绑定为单一指数，也不得把基准权重当作实际持仓权重。partial 只能表达宽泛类别，unknown 不得根据基金名称猜测；unknown 基金只在确有必要时合并说明。QDII 的正式 NAV 滞后、指数不等于基金收益等共同限制只在 fundRelationship 结尾简短说明一次。使用自然的个人财经简报语言，不写成基金合同或产品说明，不给出买入、卖出、加仓、减仓或仓位比例建议。";
+
+systems.viral_material_analysis="你是 Kiki Personal OS 的家居装修内容拆解助手。只分析用户实际提供的标题、正文或口播、指标和 Creator Profile；链接和截图仅是来源参考，未提供可读正文时不得假装看过。解释 Hook、冲突、结构和用户心理，提炼可以借鉴的机制，而不是改写或洗稿。reusablePatterns 只能保存 Hook 机制、冲突方式、信息结构、节奏或用户心理，并明确不可复制元素。adaptations 必须输出 2～3 个原创方向，严格使用 Creator Profile 的 contentPillars，符合家居装修、设计师视角和真实装修决策定位。不得复制原文措辞、原作者独特表达、原画面或个人故事；不得编造播放量、互动数据或素材事实。viralityScore 是代码给出的确定性数据，不得重算或篡改。语言真实、有观点、有审美、信息密度高，不像广告。";
 
 export async function execute(input:RunInput){
   const client=await createClient(); const provider=getProvider(input.task); const cfg=TASK_CONFIG[input.task];
@@ -48,7 +53,46 @@ export async function execute(input:RunInput){
   }catch(error){const message=error instanceof Error?error.message:"未知 Provider 错误",failureResult=error instanceof AiProviderFailure?error.metadata:providerResult;await client.from("ai_runs").update({status:"failed",error_code:message.includes("超时")?"timeout":"provider_error",error_message:message.slice(0,1000),provider:failureResult?.provider??provider.id,model:failureResult?.model??provider.model,input_tokens:failureResult?.usage.inputTokens??null,output_tokens:failureResult?.usage.outputTokens??null,total_tokens:failureResult?.usage.totalTokens??null,latency_ms:failureResult?.latencyMs??Date.now()-runStarted,completed_at:new Date().toISOString()}).eq("user_id",input.userId).eq("id",run.id);await client.from("ai_jobs").update({status:"failed"}).eq("user_id",input.userId).eq("id",job.id);throw error;}
 }
 
-export async function analyzeViralMaterial(userId:string,materialId:string){const data=await createDataAccess();const [material,profile]=await Promise.all([data.content.materials.get(userId,materialId),data.profiles.get(userId)]);if(!material)throw new Error("素材不存在");const result=await execute({userId,task:"viral_material_analysis",title:`爆款拆解：${material.title}`,artifactType:`viral_material_analysis:${material.id}`,schema:viralSchema,context:{material:{title:material.title,platform:material.platform,author:material.author_name,metrics:{views:material.views,likes:material.likes,comments:material.comments,saves:material.saves,shares:material.shares},tags:material.tags,notes:material.notes,source_url:material.source_url},profile:{content_positioning:profile?.content_positioning,target_audience:profile?.target_audience,response_style:profile?.ai_response_style}},sources:[{title:material.title,url:material.source_url,type:"viral_material"}]});const client=await createClient();const {data:artifact}=await client.from("ai_artifacts").select("id,version").eq("id",result.artifactId).single<{id:string;version:number}>();await client.from("media_material_analyses").insert({user_id:userId,material_id:material.id,analysis_type:"video_breakdown",version:artifact?.version??result.version,result:result.data,ai_artifact_id:result.artifactId});return result;}
+export async function analyzeViralMaterial(userId:string,materialId:string){
+  const data=await createDataAccess();
+  const [material,profile,assets]=await Promise.all([data.content.materials.get(userId,materialId),data.profiles.get(userId),data.content.materials.assets(userId,materialId)]);
+  if(!material)throw new Error("素材不存在");
+  const creatorProfile=normalizeCreatorProfile(profile?.creator_profile);
+  const viralityScore=calculateViralityScore(material.views,material.author_average_views);
+  const result=await execute({
+    userId,
+    task:"viral_material_analysis",
+    title:`爆款拆解：${material.title}`,
+    artifactType:`viral_material_analysis:${material.id}`,
+    schema:viralSchema,
+    context:{
+      materialFacts:{
+        title:material.title,
+        platform:material.platform,
+        contentType:material.content_type,
+        author:material.author_name,
+        suppliedText:material.content_snapshot,
+        metrics:{views:material.views,authorAverageViews:material.author_average_views,viralityScore,likes:material.likes,comments:material.comments,saves:material.saves,shares:material.shares},
+        tags:material.tags,
+        userNotes:material.notes,
+        sourceUrl:material.source_url,
+        referenceScreenshotCount:assets.length,
+      },
+      creatorProfile,
+      strictBoundaries:{screenshotContentReadableByModel:false,doNotCopyOriginalWording:true,doNotInventMetrics:true},
+    },
+    sources:[{title:material.title,url:material.source_url,type:"viral_material"}],
+    validateOutput:(value)=>{assertViralAnalysis(value,creatorProfile.contentPillars);assertNoCopiedPassages(value,material.content_snapshot??"");},
+  });
+  const client=await createClient();
+  const {data:artifact}=await client.from("ai_artifacts").select("id,version").eq("id",result.artifactId).single<{id:string;version:number}>();
+  const version=artifact?.version??result.version;
+  const existing=await client.from("media_material_analyses").select("id").eq("user_id",userId).eq("material_id",material.id).eq("analysis_type","video_breakdown").eq("version",version).maybeSingle<{id:string}>();
+  if(existing.error)throw new Error(existing.error.message);
+  if(!existing.data){const saved=await client.from("media_material_analyses").insert({user_id:userId,material_id:material.id,analysis_type:"video_breakdown",version,result:result.data,ai_artifact_id:result.artifactId});if(saved.error)throw new Error(saved.error.message);}
+  await client.from("media_viral_materials").update({status:"analyzed"}).eq("user_id",userId).eq("id",material.id);
+  return result;
+}
 
 export async function analyzeContentReview(userId:string,publicationId:string){const data=await createDataAccess();const publication=await data.content.publications.get(userId,publicationId);if(!publication)throw new Error("发布记录不存在");const [metrics,review,topic]=await Promise.all([data.content.publications.metrics(userId,publicationId),data.content.reviews.getByPublication(userId,publicationId),publication.topic_id?data.content.topics.get(userId,publication.topic_id):null]);const sources=topic?await data.content.topics.sources(userId,topic.id):[];const result=await execute({userId,task:"content_review",title:`内容复盘：${publication.title}`,artifactType:`content_review:${publication.id}`,schema:reviewSchema,context:{publication,latest_metric:metrics[0]??null,topic,topic_sources:sources,user_review:review??null},sources:[{title:publication.title,url:publication.content_url,type:"publication"},{title:topic?.title??"原选题",url:topic?.reference_url,type:"topic"}]});const client=await createClient();if(review)await client.from("media_content_reviews").update({ai_artifact_id:result.artifactId}).eq("user_id",userId).eq("id",review.id);return result;}
 

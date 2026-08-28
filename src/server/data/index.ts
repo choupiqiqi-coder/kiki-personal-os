@@ -17,7 +17,7 @@ import { createLearningData } from "./learning";
 import { createFinanceData } from "./finance";
 import { createFundsLiteData } from "./funds-lite";
 import { createFundTrendsData } from "./fund-trends";
-import { getProfile,updateProfileLite } from "./profiles";
+import { getProfile,updateCreatorProfile,updateProfileLite } from "./profiles";
 import {listMemories,setMemoryStatus} from "./memory";
 import {
   createTask,
@@ -41,6 +41,7 @@ export async function createDataAccess() {
     profiles: {
       get: (userId: string) => getProfile(client, userId),
       updateLite:(userId:string,input:Parameters<typeof updateProfileLite>[2])=>updateProfileLite(client,userId,input),
+      updateCreator:(userId:string,input:Parameters<typeof updateCreatorProfile>[2])=>updateCreatorProfile(client,userId,input),
     },
     memory:{list:(userId:string)=>listMemories(client,userId),setStatus:(userId:string,id:string,status:Parameters<typeof setMemoryStatus>[3])=>setMemoryStatus(client,userId,id,status)},
     tasks: {
