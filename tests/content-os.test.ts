@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_CREATOR_PROFILE, normalizeCreatorProfile } from "../src/lib/content/creator-profile.ts";
 import { calculateViralityScore } from "../src/lib/content/virality.ts";
+import { parseContentSourceInput } from "../src/lib/content/source-input.ts";
 import { assertNoCopiedPassages, assertViralAnalysis, type ViralAnalysis } from "../src/lib/content/viral-analysis.ts";
 
 const valid: ViralAnalysis = {
@@ -19,3 +20,11 @@ test("viral analysis requires 2-3 creator-aligned adaptations",()=>{assert.doesN
 test("adaptation cannot cite an unknown reusable pattern",()=>{const draft=structuredClone(valid);draft.adaptations[0].reusablePatternIds=["missing"];assert.throws(()=>assertViralAnalysis(draft as unknown as Record<string,unknown>,DEFAULT_CREATOR_PROFILE.contentPillars),/不存在/);});
 test("adaptation cannot invent a pillar outside Creator Profile",()=>{const draft=structuredClone(valid);draft.adaptations[0].contentPillar="炒股";assert.throws(()=>assertViralAnalysis(draft as unknown as Record<string,unknown>,DEFAULT_CREATOR_PROFILE.contentPillars),/内容支柱/);});
 test("long copied passages are rejected while mechanisms remain reusable",()=>{assert.doesNotThrow(()=>assertNoCopiedPassages(valid,"原文讲的是另一个完全不同的装修经历，没有复用这些连续表达。"));const draft=structuredClone(valid);draft.adaptations[0].hook="装修公司最不希望你知道的灯孔保护完整方法";assert.throws(()=>assertNoCopiedPassages(draft,"装修公司最不希望你知道的灯孔保护完整方法，后面还有其他内容。"),/高度重复/);});
+test("content source parser accepts pure Douyin URLs",()=>{assert.deepEqual(parseContentSourceInput("https://v.douyin.com/AbCdEf/"),{sourceUrl:"https://v.douyin.com/AbCdEf/",platform:"douyin"});});
+test("content source parser extracts a URL from Douyin share text",()=>{assert.deepEqual(parseContentSourceInput("8.28 复制打开抖音，看看【发疯日记的作品】…… https://v.douyin.com/AbCdEf/ 复制此链接"),{sourceUrl:"https://v.douyin.com/AbCdEf/",platform:"douyin"});});
+test("content source parser accepts pure Xiaohongshu URLs",()=>{assert.deepEqual(parseContentSourceInput("https://www.xiaohongshu.com/explore/123"),{sourceUrl:"https://www.xiaohongshu.com/explore/123",platform:"xiaohongshu"});});
+test("content source parser extracts a URL from Xiaohongshu share text",()=>{assert.deepEqual(parseContentSourceInput("打开小红书看内容\nhttps://xhslink.com/a1B2c3，复制后打开App"),{sourceUrl:"https://xhslink.com/a1B2c3",platform:"xiaohongshu"});});
+test("content source parser accepts ordinary web URLs",()=>{assert.deepEqual(parseContentSourceInput("https://example.com/article?id=1"),{sourceUrl:"https://example.com/article?id=1",platform:null});});
+test("content source parser returns null for text without a URL",()=>{assert.deepEqual(parseContentSourceInput("这里只是一段普通文字"),{sourceUrl:null,platform:null});});
+test("content source parser uses the first valid URL",()=>{assert.deepEqual(parseContentSourceInput("先看 https://example.com/one 再看 https://v.douyin.com/two/"),{sourceUrl:"https://example.com/one",platform:null});});
+test("content source parser ignores surrounding whitespace and line breaks",()=>{assert.deepEqual(parseContentSourceInput("  \n https://v.douyin.com/TrimMe/ \n "),{sourceUrl:"https://v.douyin.com/TrimMe/",platform:"douyin"});});
